@@ -2,7 +2,11 @@ import User from "../models/user.model.js";
 import Message from "../models/message.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import cloudinary from "../utils/cloudinary.js";
+import {io,getReceiverSocketId} from "../utils/socket.js"
+// import cloudinary from './../utils/cloudinary.js';
+import {uploadOnCloudinary} from "../utils/cloudinary.js"
+// import { upload } from './../middleware/multer.middleware';
 
 export const getUsersForSidebar = async (req, res) => {
     try {
@@ -22,8 +26,8 @@ export const getMessages = async (req,res)=>{
         const senderId=req.user._id;
         const messages=await Message.find({
             $or:[
-                {senderId:senderId,receiverId:userToChatId},
-                {senderId:userToChatId,receiverId:senderId}
+                {senderId:senderId,reciverId:userToChatId},
+                {senderId:userToChatId,reciverId:senderId}
             ]
         })
         if(!messages) new ApiError(404,"No messages found")
@@ -36,26 +40,48 @@ export const getMessages = async (req,res)=>{
 export const sendMessage = async (req,res)=>{
     try {
         const {id:receiverId}=req.params
+        // console.log(receiverId,"receiverId");
+        // console.log(req.user._id,"senderId");
         const senderId=req.user._id
-        const {text}=req.body
-        const image = req.files?.image[0]?.path;
-        let imageUrl
-        if(image){
-        const uploadImage = await uploadOnCloudinary(image)
+        const { text,image } = req.body;
+        // console.log(req)
+        if (!text && !image) {
+      throw new ApiError(400, "Message must contain text or an image");
+    }
 
-        if(!uploadImage) throw new ApiError(500,"Something went wrong while uploading image")
-         imageUrl = uploadImage.secure_url
-        }
+    let imageUrl = null;
+    if (image) {
+        // console.log(req.files.image.path);
+    //   const localImagePath = req.files.image.path;
+    //   const uploadResult = await uploadOnCloudinary(localImagePath);
+      const uploadResult = await cloudinary.uploader.upload(image, {
+        resource_type: "auto"
+        // folder: "folder_name"
+    })
+
+      if (!uploadResult) {
+        throw new ApiError(500, "Failed to upload image to Cloudinary");
+      }
+      imageUrl = uploadResult.secure_url;
+    }
+        console.log(imageUrl,"imageUrl");
         const newMessage=new Message({
             senderId,
-            receiverId,
-            text,
+            reciverId:receiverId,//:reciverUser._id,
+            text:text || "",
             image:imageUrl || null
         })
+        // await newMessage.save()
+        const receiverSocketId = getReceiverSocketId(receiverId);
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("newMessage", newMessage);
+    }
+        if(!newMessage) throw new ApiError(500,"Failed to send message")
         await newMessage.save()
         res.status(200).json(new ApiResponse(200,newMessage,"Message sent successfully"))
     } catch (error) {
-        res.status(error.statusCode).json(new ApiResponse(500,null,error.message))
+        console.log(error);
+        res.status(error.statusCode || 500).json(new ApiResponse(error.statusCode,null,error.message))
     }
 }
 // export {}

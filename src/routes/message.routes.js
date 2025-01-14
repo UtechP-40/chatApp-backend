@@ -7,13 +7,8 @@ const router = Router()
 
 router.get("/users", verifyJWT, getUsersForSidebar)
 router.get("/:id", verifyJWT, getMessages)
-router.post("/send/:id", verifyJWT,upload.fields([
-    {
-        name: "image",
-        maxCount: 1
-    }
-]), sendMessage)
-
+// router.post("/send/:id", verifyJWT ,sendMessage)
+router.post("/send/:id", verifyJWT,upload.single("image"), sendMessage)
 
 
 export default router;  

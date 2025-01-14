@@ -191,7 +191,7 @@ const updateProfile = async (req,res)=>{
         user.save({validateBeforeSave:false})
         res.status(200).json(new ApiResponse(200, user, "Profile updated successfully"))
     } catch (err) {
-        res.status(err.statusCode).json(new ApiResponse(err.statusCode || 400,null,err.message))
+        res.status(err.statusCode || 400).json(new ApiResponse(err.statusCode || 400,null,err.message))
     }
 
 }

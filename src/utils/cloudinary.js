@@ -32,7 +32,7 @@ const uploadOnCloudinary = async (localFilePath) => {
 }
 
 export {uploadOnCloudinary};
-
+export default cloudinary;
 // cloudinary.uploader.upload(filePath, {resource_type: "video", folder: "folder_name"}, (error, result) => {
 //     if (error) {
 //         console.error("Upload failed:", error);

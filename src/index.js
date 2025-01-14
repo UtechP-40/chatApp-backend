@@ -6,6 +6,15 @@ import connectDb from "./lib/database.config.js"
 import cookieParser from "cookie-parser"
 import dotenv from "dotenv";
 import {app,server} from "./utils/socket.js"
+import bodyParser from "body-parser"
+
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+
+
+// app.use(fileUpload({
+//     limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+//   }));
 // const app = express();
 // import "./seeds/user.seeds.js"
 app.use(express.static("public"))
