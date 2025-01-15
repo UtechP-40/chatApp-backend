@@ -6,10 +6,10 @@ import express from "express";
 dotenv.config();
 const app = express();
 const server = http.createServer(app);
-
+const origion = process.env.NODE_ENV === "production"?process.env.CORS_ORIGIN: "http://localhost:5173"
 const io = new Server(server, {
   cors: {
-    origin: [process.env.CORS_ORIGIN],
+    origin: [origion],
   },
 });
 
