@@ -1,5 +1,5 @@
 import express from 'express';
-import {signUpRoute, loginRoute, logoutRoute,refreshAccessToken,updateProfile,checkAuthRoute} from '../controllers/auth.controller.js';
+import {signUpRoute, loginRoute, logoutRoute,refreshAccessToken,updateProfile,checkAuthRoute,getAllFriends,addFriend,searchUsersByName} from '../controllers/auth.controller.js';
 import { verifyJWT } from '../middleware/auth.middleware.js';
 import {upload} from '../middleware/multer.middleware.js';
 const router = express.Router();
@@ -19,4 +19,7 @@ router.post('/update-profile', verifyJWT,upload.fields([
         maxCount: 1
     }
 ]),updateProfile);
+router.get("/get-friends",verifyJWT,getAllFriends)
+router.post("/add-friend",verifyJWT,addFriend)
+router.get('/search-users', verifyJWT, searchUsersByName);
 export default router;  

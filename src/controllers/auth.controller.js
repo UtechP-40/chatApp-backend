@@ -4,6 +4,8 @@ import {ApiResponse} from "../utils/ApiResponse.js"
 import jwt from "jsonwebtoken"
 import { uploadOnCloudinary } from "../utils/cloudinary.js"
 // import { checkAuth } from './../../../client/src/redux/features/userAuthSlice';
+import Friend from "../models/friend.model.js";
+// import {io,getReceiverSocketId,userSocketMap} from "../utils/socket.js"
 
 const generateAccessAndRefreshTokens = async (userId)=>{
     try{
@@ -208,4 +210,101 @@ const checkAuthRoute = async (req,res)=>{
     }
 }
 
-export {signUpRoute, loginRoute, logoutRoute,refreshAccessToken,updateProfile,checkAuthRoute}; 
+const getAllFriends = async (req, res) => {
+    const userId = req.user._id; // The logged-in user's ID
+    console.log(userId)
+    try {
+      // Query all friends where the user is involved
+      const friends = await Friend.find({ user: userId }).populate("friend", "fullName email profilePicture");
+  
+      if (!friends || friends.length === 0) {
+        throw new ApiError(404, "No friends found");
+      }
+  
+      res.status(200).json(
+        new ApiResponse(200, friends, "Friends retrieved successfully")
+      );
+    } catch (err) {
+      res
+        .status(err.statusCode || 500)
+        .json(new ApiResponse(err.statusCode || 500, null, err.message));
+    }
+  };
+
+const addFriend = async (req, res) => {
+    const { friendId } = req.body; // The ID of the friend being added
+    const userId = req.user._id; // The logged-in user's ID
+  
+    try {
+      // Validate IDs
+      if (!friendId) {
+        throw new ApiError(400, "Friend ID is required");
+      }
+  
+      if (userId.toString() === friendId) {
+        throw new ApiError(400, "You cannot add yourself as a friend");
+      }
+  
+      // Check if the friend exists
+      const friendExists = await User.findById(friendId);
+      if (!friendExists) {
+        throw new ApiError(404, "Friend not found");
+      }
+  
+      // Check if the relationship already exists
+      const existingFriendship = await Friend.findOne({
+        user: userId,
+        friend: friendId,
+      });
+  
+      if (existingFriendship) {
+        throw new ApiError(409, "You are already friends with this user");
+      }
+  
+      // Add the friend relationship (bidirectional if required)
+      const friendship1 = new Friend({ user: userId, friend: friendId });
+      const friendship2 = new Friend({ user: friendId, friend: userId });
+    //   console.log(existingFriendship);
+      await Promise.all([friendship1.save(), friendship2.save()]);
+  
+      res.status(201).json(
+        new ApiResponse(
+          201,
+          { userId, friendId },
+          "Friend added successfully"
+        )
+      );
+    } catch (err) {
+      res
+        .status(err.statusCode || 500)
+        .json(new ApiResponse(err.statusCode || 500, null, err.message));
+    }
+};
+
+const searchUsersByName = async (req, res) => {
+    const { name } = req.query; // Get the search term from the query string
+
+    if (!name) {
+        return res.status(400).json(new ApiResponse(400, null, "Name is required for search"));
+    }
+
+    try {
+        // Use a regular expression to find users whose fullName "almost matches" the search term
+        // The "i" flag makes the regex case-insensitive
+        const regex = new RegExp(name, "i");
+
+        // Search for users whose names match the regex
+        const users = await User.find({ fullName: { $regex: regex } }).select("-password -refreshToken");
+
+        if (users.length === 0) {
+            return res.status(404).json(new ApiResponse(404, null, "No users found matching that name"));
+        }
+
+        res.status(200).json(new ApiResponse(200, users, "Users found successfully"));
+    } catch (err) {
+        console.error(err);
+        res.status(500).json(new ApiResponse(500, null, "Something went wrong while searching for users"));
+    }
+};
+
+export {signUpRoute, loginRoute, logoutRoute,refreshAccessToken,updateProfile,checkAuthRoute,getAllFriends,addFriend,searchUsersByName};

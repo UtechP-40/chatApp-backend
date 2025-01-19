@@ -44,7 +44,7 @@ app.use("/api/message",messageRoutes)
 
 
 connectDb().then(() => {
-    server.listen(port, () => {    
+    server.listen(port,'0.0.0.0', () => {    
         console.log(`Server is running on port http://localhost:${port}`)
     })
 }).catch((error) => {
