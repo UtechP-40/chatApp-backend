@@ -61,52 +61,49 @@ const signUpRoute = async (req, res) => {
     }
     // res.send('SignUp route');
 }
+
 const loginRoute = async (req, res) => {
-    const {email,password}=req.body
-    try{
-    if(!email){
-        throw new ApiError(400, "Email is required")
+    const { email, password } = req.body;
+    try {
+        if (!email || !password) {
+            throw new ApiError(400, "Email and Password are required");
+        }
+
+        const user = await User.findOne({ email });
+        if (!user) {
+            throw new ApiError(404, "User does not exist");
+        }
+
+        const isPasswordValid = await user.isPasswordCorrect(password);
+        if (!isPasswordValid) {
+            throw new ApiError(401, "Incorrect password");
+        }
+
+        // Invalidate old refresh token
+        user.refreshToken = null;
+        await user.save({ validateBeforeSave: false });
+
+        const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
+
+        user.refreshToken = refreshToken;
+        await user.save({ validateBeforeSave: false });
+
+        const options = {
+            httpOnly: true,
+            secure: true
+        };
+
+        return res
+            .status(200)
+            .cookie("accessToken", accessToken, options)
+            .cookie("refreshToken", refreshToken, options)
+            .json(new ApiResponse(200, { user, accessToken, refreshToken }, "User logged in successfully"));
+    } catch (err) {
+        return res.status(err.statusCode || 400).json(new ApiResponse(err.statusCode || 400, null, err.message));
     }
+};
 
-   const user = await User.findOne(
-    {email}
-   )
-   if(!user){
-    throw new ApiError(404, "User dose not exist")
-   }
-   const isPasswordValid =  await user.isPasswordCorrect(password)
-   if(!isPasswordValid){
-    throw new ApiError(404, "Incorrect Password")
-   }
-   
-   const {accessToken,refreshToken}=await generateAccessAndRefreshTokens(user._id)
-   console.log(refreshToken,accessToken);
-user.refreshToken = refreshToken;
-await user.save({ validateBeforeSave: false });
-   console.log(refreshToken)
-   const loggedInUser = await User.findById(user._id).select("-password -refreshToken")
 
-   const options = {
-    httpOnly: true,
-    secure: true
-   }
-
-res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options).json(
-    new ApiResponse(
-        200,
-        {
-            user: loggedInUser,
-            accessToken,
-            refreshToken
-        },
-        "User logged in Successfully"
-    )
-)
-}catch(err){
-    console.log(err)
-    res.status(err.statusCode || 404).json(new ApiResponse(err.statusCode || 400,null,err.message))
-}
-}
 const logoutRoute = async (req,res)=>{
     try {
         await User.findByIdAndUpdate(
@@ -133,44 +130,50 @@ const logoutRoute = async (req,res)=>{
     }
  }
  
-const refreshAccessToken = async (req,res)=>{
+ const refreshAccessToken = async (req, res) => {
+    const options = {
+        httpOnly: true,
+        secure: true
+    };
     try {
-     const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshTokne
-     if(!incomingRefreshToken){
-         throw new ApiError(401,"unauthorized request")
-     }
-     
-         const decodedToken = jwt.verify(
-             incomingRefreshToken,
-             process.env.REFRESH_TOKEN_SECRATE
-         )
-         const user = await User.findById(decodedToken?._id)
-     
-         if(!user){
-             throw new ApiError(401,"Invalid Refresh token")
-         }
-         if(incomingRefreshToken !== user?.refreshToken){
-             throw new ApiError(401,"Refresh token is expired or used")
-         }
-         const options = {
-             httpOnly:true,
-             secure:true
-         }
-         const {accessToken,newrefreshToken} =await generateAccessAndRefreshTokens(user._id)
-         return res.status(200).cookie("accessToken",accessToken ,options).cookie("refreshToken",newrefreshToken,options).json(
-             new ApiResponse(
-                 200,
-                 {
-                     accessToken,newrefreshToken
-                 },
-                 "Access Token refreshed"
-             )
-         )
-     } catch (err) {
-        //  throw new ApiError(401,err?.message || "Invalid refresh Token")
-         res.status(err.statusCode).json(new ApiResponse(err.statusCode || 400,null,err.message))
-     }
- }
+        const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
+
+        if (!incomingRefreshToken) {
+            throw new ApiError(401, "Unauthorized request");
+        }
+
+        const decodedToken = jwt.verify(
+            incomingRefreshToken,
+            process.env.REFRESH_TOKEN_SECRET
+        );
+
+        const user = await User.findById(decodedToken?._id);
+        if (!user) {
+            throw new ApiError(401, "Invalid refresh token");
+        }
+
+        if (incomingRefreshToken !== user.refreshToken) {
+            throw new ApiError(401, "Refresh token is expired or invalid");
+        }
+
+        const { accessToken, refreshToken: newRefreshToken } = await generateAccessAndRefreshTokens(user._id);
+        user.refreshToken = newRefreshToken;
+        await user.save({ validateBeforeSave: false });
+
+        return res
+            .status(200)
+            .cookie("accessToken", accessToken, options)
+            .cookie("refreshToken", newRefreshToken, options)
+            .json(new ApiResponse(200, { accessToken, newRefreshToken }, "Access Token refreshed"));
+    } catch (err) {
+        return res
+            .status(err.statusCode || 401)
+            .clearCookie("accessToken", options)
+            .clearCookie("refreshToken", options)
+            .json(new ApiResponse(err.statusCode || 400, null, err.message));
+    }
+};
+
 
 const updateProfile = async (req,res)=>{
     const avatarLocalPath = req.files?.avatar[0]?.path;
@@ -307,4 +310,52 @@ const searchUsersByName = async (req, res) => {
     }
 };
 
-export {signUpRoute, loginRoute, logoutRoute,refreshAccessToken,updateProfile,checkAuthRoute,getAllFriends,addFriend,searchUsersByName};
+const removeFriend = async (req, res) => {
+    const { friendId } = req.body; // The ID of the friend to be removed
+    const userId = req.user._id; // The logged-in user's ID
+
+    try {
+        // Validate IDs
+        if (!friendId) {
+            throw new ApiError(400, "Friend ID is required");
+        }
+
+        if (userId.toString() === friendId) {
+            throw new ApiError(400, "You cannot remove yourself as a friend");
+        }
+
+        // Check if the friend exists
+        const friendExists = await User.findById(friendId);
+        if (!friendExists) {
+            throw new ApiError(404, "Friend not found");
+        }
+
+        // Check if the friendship exists
+        const userFriendship = await Friend.findOne({ user: userId, friend: friendId });
+        const friendFriendship = await Friend.findOne({ user: friendId, friend: userId });
+
+        if (!userFriendship || !friendFriendship) {
+            throw new ApiError(404, "Friendship does not exist");
+        }
+
+        // Remove the friendship (bidirectional removal)
+        await Promise.all([
+            Friend.deleteOne({ _id: userFriendship._id }),
+            Friend.deleteOne({ _id: friendFriendship._id }),
+        ]);
+
+        res.status(200).json(
+            new ApiResponse(200, { userId, friendId }, "Friend removed successfully")
+        );
+    } catch (err) {
+        console.error(err);
+        res.status(err.statusCode || 500).json(
+            new ApiResponse(err.statusCode || 500, null, err.message)
+        );
+    }
+};
+
+
+
+
+export {signUpRoute, loginRoute, logoutRoute,refreshAccessToken,updateProfile,checkAuthRoute,getAllFriends,addFriend,searchUsersByName,removeFriend};
