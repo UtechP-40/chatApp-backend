@@ -16,14 +16,19 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
         const user = await User.findById(decodedToken?._id).select("-password -refreshToken")
     
         if(!user){
-            
+             
             throw new ApiError(401, "Invalid Access Token")
         }
         req.user = user;
         next()
     } catch (err) {
         // throw new ApiError(401, error?.message || "Invalid Access Token")
-        console.log(err.message)
-        res.status(err.statusCode ||400).json(new ApiResponse(err.statusCode || 400,null,err.message))
+        // console.log(err.message)
+        return res
+            .status(err.statusCode || 401)
+            .clearCookie("accessToken", options)
+            .clearCookie("refreshToken", options)
+            .json(new ApiResponse(err.statusCode || 400, null, err.message));
+        // res.status(err.statusCode ||400).json(new ApiResponse(err.statusCode || 400,null,err.message))
     }
 })
