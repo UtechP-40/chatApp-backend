@@ -1,6 +1,7 @@
 import express from "express"
 import authRoutes from "./routes/auth.routes.js"
 import messageRoutes from "./routes/message.routes.js"
+import chatRoutes from "./routes/chat.routes.js"
 import cors from "cors";
 import connectDb from "./lib/database.config.js"
 import cookieParser from "cookie-parser"
@@ -41,6 +42,7 @@ const port = 80
 //   });
 app.use("/api/auth",authRoutes)
 app.use("/api/message",messageRoutes)
+app.use("/api/group",chatRoutes)
 
 
 connectDb().then(() => {

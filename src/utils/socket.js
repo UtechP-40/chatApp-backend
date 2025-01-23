@@ -39,6 +39,15 @@ io.on("connection", (socket) => {
     io.emit("getOnlineUsers", Object.keys(userSocketMap));
   }
 
+  socket.on('joinGroup', (groupId) => {
+    socket.join(groupId);
+    console.log(groupId,"hellllll")
+  });
+
+  socket.on('leaveGroup', (groupId) => {
+    socket.leave(groupId);
+  });
+
   socket.on("disconnect", () => {
     console.log("A user disconnected:", socket.id);
 

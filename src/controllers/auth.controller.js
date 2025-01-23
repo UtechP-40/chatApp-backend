@@ -6,6 +6,7 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js"
 // import { checkAuth } from './../../../client/src/redux/features/userAuthSlice';
 import Friend from "../models/friend.model.js";
 // import {io,getReceiverSocketId,userSocketMap} from "../utils/socket.js"
+import Message from "../models/message.model.js"; 
 
 const generateAccessAndRefreshTokens = async (userId)=>{
     try{
@@ -203,6 +204,7 @@ const updateProfile = async (req,res)=>{
 
 const checkAuthRoute = async (req,res)=>{
     try {
+        console.log(req.connection.remoteAddress)
         const user = await User.findById(req.user._id).select("-password -refreshToken")
         if(!user){
             throw new ApiError(404,"User not found")
@@ -215,24 +217,30 @@ const checkAuthRoute = async (req,res)=>{
 
 const getAllFriends = async (req, res) => {
     const userId = req.user._id; // The logged-in user's ID
-    console.log(userId)
+
     try {
-      // Query all friends where the user is involved
-      const friends = await Friend.find({ user: userId }).populate("friend", "fullName email profilePicture");
-  
-      if (!friends || friends.length === 0) {
-        throw new ApiError(404, "No friends found");
-      }
-  
-      res.status(200).json(
-        new ApiResponse(200, friends, "Friends retrieved successfully")
-      );
+        // Query all friends where the user is involved
+        const friends = await Friend.find({ user: userId })
+            .populate("friend", "fullName email profilePicture")
+            .sort({ lastInteractionDate: -1 }) // Sort by most recent interaction
+            .lean(); // Use `lean()` to convert Mongoose objects to plain JSON
+
+        if (!friends || friends.length === 0) {
+            throw new ApiError(404, "No friends found");
+        }
+
+        res.status(200).json(
+            new ApiResponse(200, friends, "Friends retrieved successfully")
+        );
     } catch (err) {
-      res
-        .status(err.statusCode || 500)
-        .json(new ApiResponse(err.statusCode || 500, null, err.message));
+        console.error(err);
+        res
+            .status(err.statusCode || 500)
+            .json(new ApiResponse(err.statusCode || 500, null, err.message));
     }
-  };
+};
+
+
 
 const addFriend = async (req, res) => {
     const { friendId } = req.body; // The ID of the friend being added

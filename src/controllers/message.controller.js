@@ -7,7 +7,7 @@ import {io,getReceiverSocketId} from "../utils/socket.js"
 // import cloudinary from './../utils/cloudinary.js';
 import {uploadOnCloudinary} from "../utils/cloudinary.js"
 // import { upload } from './../middleware/multer.middleware';
-
+import Friend from "../models/friend.model.js";
 export const getUsersForSidebar = async (req, res) => {
     try {
         const loggedInUser = req.user;
@@ -106,7 +106,7 @@ export const getMessages = async (req, res) => {
   };
   
 
-export const sendMessage = async (req, res) => {
+  export const sendMessage = async (req, res) => {
     try {
       const { id: receiverId } = req.params;
       const senderId = req.user._id;
@@ -141,6 +141,14 @@ export const sendMessage = async (req, res) => {
         let reply = await Message.findById(replyTo)
         newMessage.replyTo = reply
       }
+      await Friend.findOneAndUpdate(
+        { user: senderId, friend: receiverId },
+        { lastInteractionDate: new Date() }
+      );
+      await Friend.findOneAndUpdate(
+        { user: receiverId, friend: senderId },
+        { lastInteractionDate: new Date() }
+      );
       console.log(newMessage)
       if (receiverSocketId) {
         io.to(receiverSocketId).emit("newMessage", newMessage);
@@ -153,6 +161,7 @@ export const sendMessage = async (req, res) => {
       res.status(error.statusCode || 500).json(new ApiResponse(error.statusCode, null, error.message));
     }
   };
+
   
 
   export const deleteMessage = async (req, res) => {
